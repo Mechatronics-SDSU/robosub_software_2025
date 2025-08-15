@@ -13,8 +13,8 @@ import os
 #from modules.pid.pid_interface              import PIDInterface
 #from modules.sensors.a50_dvl.dvl_interface  import DVL_Interface
 #from modules.vision.vision_main             import VisionDetection
-from socket_send                            import set_screen
-from coinflip_fsm                           import CoinFlip_FSM
+from utils.socket_send                            import set_screen
+from fsm.coinflip_fsm                           import CoinFlip_FSM
 
 """
     discord: @.kech
