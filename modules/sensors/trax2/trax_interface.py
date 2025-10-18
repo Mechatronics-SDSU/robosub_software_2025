@@ -1,6 +1,10 @@
+import sys, os
+from pathlib import Path
 from multiprocessing                        import Process, Value
-from shared_memory                          import SharedMemoryWrapper
-from trax_fxns                              import TRAX
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+from shared_memory import SharedMemoryWrapper
+
 from trax_fxns                              import TRAX
 import time
 
@@ -11,18 +15,11 @@ class Trax_Interface(TRAX):
     github: @rsunderr
     """
 
-    def __init__(self, shared_memory_object: SharedMemoryWrapper):
+    def __init__(self, shared_memory_object: SharedMemoryWrapper=None):
         """
         Trax interface constructor
         """
         self.shared_memory_object = shared_memory_object
-        super().__init__()
-
-    def run_loop(self) -> None:
-        """
-        Function targeted by looping multiprocessing calls, called only once
-        """
-        self.connect()
         super().__init__()
 
     def run_loop(self) -> None:
@@ -95,7 +92,5 @@ class Trax_Interface(TRAX):
 if __name__ == "__main__":
     shared_memory_object = "placeholder"
     trax = Trax_Interface(shared_memory_object)
-    comps = ()
-    trax.get_data()
     comps = ()
     trax.get_data()
