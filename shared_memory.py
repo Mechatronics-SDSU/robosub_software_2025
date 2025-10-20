@@ -48,6 +48,14 @@ class SharedMemoryWrapper:
         self.dvl_velocity_valid     = Value('b', False)
         self.dvl_status             = Value('b', False)
         self.dvl_altitude           = Value('d', 0)
+        
+        # trax values
+        self.trax_yaw               = Value('d', 0)
+        self.trax_pitch             = Value('d', 0)
+        self.trax_roll              = Value('d', 0)
+        self.trax_x                 = Value('d', 0)
+        self.trax_y                 = Value('d', 0)
+        self.trax_z                 = Value('d', 0)
 
         ### change these values for PID testing ###
         self.target_x               = Value('d', 0)

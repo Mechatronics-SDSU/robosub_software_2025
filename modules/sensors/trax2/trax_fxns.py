@@ -9,6 +9,24 @@ from serial.tools import list_ports
     mechatronics@sundermeyer.com
 """
 
+
+# Set up module-level logger
+LEVEL = logging.ERROR
+logger = logging.getLogger(__name__)
+logger.setLevel(LEVEL)
+
+# Create console handler if it doesn't exist
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(LEVEL)
+    
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    
+    # Add handler to logger
+    logger.addHandler(console_handler)
+
 class TRAX:
     """
     Wrapper class for trax-related functions
@@ -16,11 +34,10 @@ class TRAX:
     # CONNECTION AND SETUP ------------------------------------------------------------------------------------------------------------------------------------------------
     def __init__(self, ser=serial.Serial(), baud: int=38400):
         """
-        Constructor (serial, baud rate, logger)
+        Constructor (serial, baud rate)
         """
         self.ser: serial.Serial = ser
         self.baud: int = baud
-        self.lg = logging.getLogger(__name__) # TODO replace some prints with debugs
     
     def connect(self) -> None:
         """
@@ -31,15 +48,14 @@ class TRAX:
         ports: list = list_ports.comports()
         for port in ports:
             if port.serial_number == trax1 or port.serial_number == trax2: # connect to a trax
-                #print(f"PORT SERIAL #: {port}")
                 try:
                     self.ser = serial.Serial(port.device, self.baud, timeout=1)
-                    print("TRAX CONNECTED: ", port.device)
+                    logger.info(f"TRAX CONNECTED: {port.device}")
                     return
                 except:
-                    self.lg.critical("TRAX FOUND, UNABLE TO CONNECT")
+                    logger.critical("TRAX FOUND, UNABLE TO CONNECT")
                     return
-        self.lg.critical("NO TRAX FOUND")
+        logger.critical("NO TRAX FOUND")
 
     
     def close(self) -> None:
@@ -62,18 +78,19 @@ class TRAX:
         if restOfPacket != None: packet += restOfPacket # concatenate rest of packet bytes
 
         if packet == b'': # if packet is empty, warn user and stop fxn
-            self.lg.critical("NO MESSAGE RECEIVED")
+            logger.critical("NO MESSAGE RECEIVED")
             return (-1,)
-        
-        print("RECEIVED:\t", TRAX.parse_bytes(packet), end="\t") # read packet contents
+
+        log_string: str = f"RECEIVED:\t{TRAX.parse_bytes(packet)}"
         response: tuple = TRAX.read_packet(packet, usable_payload) # read packet into tuple of values
 
         verified: bool = TRAX.verify_CRC(packet) # verify packet using checksum
         if verified:
-            print("CHECKSUM VERIFIED")
+            log_string += f"\tCHECKSUM VALID"
+            logger.info(log_string)
             return response
         else:
-            self.lg.critical("CORRUPTED PACKET: CHECKSUM FAILED")
+            logger.critical("CORRUPTED PACKET: CHECKSUM FAILED")
             return (-1,)
     
     @staticmethod
@@ -122,7 +139,7 @@ class TRAX:
         try:
             return struct.unpack(decode_str, packet)
         except:
-            print("WARNING: CORRUPTED PACKET")
+            logger.warning("WARNING: CORRUPTED PACKET")
             return (-1,)
     
     # SENDING DATA ------------------------------------------------------------------------------------------------------------------------------------------------
@@ -135,7 +152,7 @@ class TRAX:
 
         packet: bytes = TRAX.create_packet(usable_frameID, usable_payload) # create packet in bytes
         self.ser.write(packet) # send packet over serial
-        print("TRANSMISSION:\t", TRAX.parse_bytes(packet)) # print transmission contents
+        logger.info(f"TRANSMISSION:\t{TRAX.parse_bytes(packet)}") # print transmission contents
 
     @staticmethod
     def create_packet(frameID: int, payload: list | tuple) -> bytes: # datagram: [ byte count uint16 ] [ frame ID uint8 ] [ payload (opt) ] [ CRC uint16 ]
@@ -222,7 +239,7 @@ class TRAX:
             case "kSetMergeRate":       return 128
             case "kGetMergeRate":       return 129
             case _: 
-                print("Invalid Frame ID")
+                logger.error("Invalid Frame ID")
                 return -1
     
     # HELPER FUNCTIONS ------------------------------------------------------------------------------------------------------------------------------------------------
