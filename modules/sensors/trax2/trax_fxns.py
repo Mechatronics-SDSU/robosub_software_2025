@@ -10,21 +10,21 @@ from serial.tools import list_ports
 """
 
 
-# Set up module-level logger
+# set up module level logger
 LEVEL = logging.ERROR
 logger = logging.getLogger(__name__)
 logger.setLevel(LEVEL)
 
-# Create console handler if it doesn't exist
+# create console handler if it doesnt exist
 if not logger.handlers:
     console_handler = logging.StreamHandler()
     console_handler.setLevel(LEVEL)
     
-    # Create formatter
+    # create formatter
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console_handler.setFormatter(formatter)
     
-    # Add handler to logger
+    # add handler to logger
     logger.addHandler(console_handler)
 
 class TRAX:
@@ -74,12 +74,15 @@ class TRAX:
         packet: bytes = self.ser.read(2) # read first 2 bytes to get byte count
         usable_payload: tuple = tuple(payload) if payload is not None else () # make usable payload tuple for fxn call
         byteCount: int = struct.unpack(">H", packet)[0] # get byte count
+        if byteCount < 5: # invalid byte count, warn user and stop fxn
+            logger.critical("INVALID BYTE COUNT RECEIVED")
+            raise Exception("INVALID BYTE COUNT RECEIVED")
         restOfPacket: bytes = self.ser.read(byteCount - 2) # continue reading rest of packet based on byte count
         if restOfPacket != None: packet += restOfPacket # concatenate rest of packet bytes
 
         if packet == b'': # if packet is empty, warn user and stop fxn
             logger.critical("NO MESSAGE RECEIVED")
-            return (-1,)
+            raise Exception("NO MESSAGE RECEIVED")
 
         log_string: str = f"RECEIVED:\t{TRAX.parse_bytes(packet)}"
         response: tuple = TRAX.read_packet(packet, usable_payload) # read packet into tuple of values
@@ -91,7 +94,7 @@ class TRAX:
             return response
         else:
             logger.critical("CORRUPTED PACKET: CHECKSUM FAILED")
-            return (-1,)
+            raise Exception("CORRUPTED PACKET: CHECKSUM FAILED")
     
     @staticmethod
     def read_packet(packet: bytes, payload: list | tuple) -> tuple:
@@ -115,24 +118,18 @@ class TRAX:
             # ID SPECIFIC FRAMES: TODO: not sure if quaternion works
             case 130:   decode_str += "Bf" # kGetMergeRateResp
             case 5: # kGetDataResp
-                if payload != None:
-                    decode_str += "B" # ID Count
-                    id_list = payload[1:]
-                    for id in id_list: # NOTE: expected tuple payload from prior kSetDataComponents call: (ID count, ID, ID, ...)
-                        decode_str += "B" # reads: ID Count, ID, Status, ID, Status, ...
-                        decode_str += TRAX.componentID_type(id) # gets struct lib char based on Component ID
-                else: return (-1,)
+                decode_str += "B" # ID Count
+                id_list = payload[1:]
+                for id in id_list: # NOTE: expected tuple payload from prior kSetDataComponents call: (ID count, ID, ID, ...)
+                    decode_str += "B" # reads: ID Count, ID, Status, ID, Status, ...
+                    decode_str += TRAX.componentID_type(id) # gets struct lib char based on Component ID
             case 8: # kGetConfigResp
-                if payload != None:
-                    decode_str += "B" + TRAX.configID_type(payload[0]) # NOTE: expected tuple payload from prior kGetConfig call: (Config ID,)
-                else: return (-1,)
+                decode_str += "B" + TRAX.configID_type(payload[0]) # NOTE: expected tuple payload from prior kGetConfig call: (Config ID,)
             case 14: # kGetFIRFiltersResp
-                if payload != None:
-                    decode_str += "BBB"
-                    N = payload[2] # NOTE: number of float 64 filter vals in payload based on 3rd bit of payload from prior kSetFirFilters call: (x,x, N, ...)
-                    if N == 0 or N == 4 or N == 8 or N == 16 or N == 32:
-                        for _ in range(N): decode_str += "F" # meant to be 0, 4, 8, 16, or 32 tap filter values
-                else: return (-1,)
+                decode_str += "BBB"
+                N = payload[2] # NOTE: number of float 64 filter vals in payload based on 3rd bit of payload from prior kSetFirFilters call: (x,x, N, ...)
+                if N == 0 or N == 4 or N == 8 or N == 16 or N == 32:
+                    for _ in range(N): decode_str += "F" # meant to be 0, 4, 8, 16, or 32 tap filter values
             # ID # 19, 23, 26, 28, 30, 37, 44 have no payload
         
         decode_str += "H" # CRC
@@ -140,7 +137,7 @@ class TRAX:
             return struct.unpack(decode_str, packet)
         except:
             logger.warning("WARNING: CORRUPTED PACKET")
-            return (-1,)
+            raise Exception("CORRUPTED PACKET")
     
     # SENDING DATA ------------------------------------------------------------------------------------------------------------------------------------------------
     def send_packet(self, frameID: int | str, payload: list | tuple | None = None) -> None:
@@ -240,7 +237,7 @@ class TRAX:
             case "kGetMergeRate":       return 129
             case _: 
                 logger.error("Invalid Frame ID")
-                return -1
+                raise Exception("Invalid Frame ID")
     
     # HELPER FUNCTIONS ------------------------------------------------------------------------------------------------------------------------------------------------
     @staticmethod
