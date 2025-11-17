@@ -18,6 +18,7 @@ import time, os, random, yaml, subprocess
 # from coinflip_fsm                           import CoinFlip_FSM
 
 
+
 shared_memory_object = SharedMemoryWrapper()
 
 gate_mode   = Gate_FSM(shared_memory_object, [])
@@ -27,139 +28,197 @@ return_mode = Return_FSM(shared_memory_object, [])
 mode_list   = [gate_mode, slalom_mode, oct_mode, return_mode]
 
 
-def move_toward(curr: float, target: float,
-                k: float = 0.15,
+def move_toward(current_value: float,
+                target_value: float,
+                test_prop_gain: float = 0.15,
                 max_step: float | None = None,
-                noise_scale: float = 0.05) -> float:
-    # Move partway toward target, with random noise
-    delta = (target - curr) * k
-    disturbance = random.uniform(-noise_scale, noise_scale)
-    delta += disturbance
+                noise_range: float = 0.05) -> float:
+    """
+    Move partway toward the target with a small random disturbance.
+    - test_prop_gain sets what fraction of the remaining error to move
+    - max_step limits how big a single update can be
+    - noise_range adds small uniform noise to avoid perfect motion
+    """
+    error = target_value - current_value
+    step_delta = error * test_prop_gain
 
+    """Add a small random disturbance in [-noise_range, +noise_range]."""
+    random_disturbance = random.uniform(-noise_range, noise_range)
+    step_delta += random_disturbance
+
+    """Limit the step size if a cap is provided."""
     if max_step is not None:
-        if delta >  max_step: delta =  max_step
-        if delta < -max_step: delta = -max_step
+        if step_delta >  max_step: step_delta =  max_step
+        if step_delta < -max_step: step_delta = -max_step
 
-    return curr + delta
+    return current_value + step_delta
 
 
-def approx_equal(a: float, b: float, tol: float = 0.05) -> bool:
-    return abs(a - b) <= tol
+def approx_equal(current_value: float, target_value: float, absolute_tolerance: float = 0.05) -> bool:
+    """
+    Return True when current_value is within absolute_tolerance of target_value.
+    """
+    return abs(current_value - target_value) <= absolute_tolerance
     
 
-def get_targets_for_mode(mode_name: str, data: dict, profile: str = "test"):
+def read_yaml_config() -> dict:
     """
-    Return exactly THREE values (tx, ty, tz) for the current mode.
-
-    The YAML may contain extra fields (buffers, waypoints, pauses, etc.),
-    but the motion loop only needs a single immediate (x, y, z) target.
+    Load YAML into a dict. Return {} on file or parse errors.
+    Keeps the loop running even if the file is temporarily invalid.
     """
-    root = data.get(profile, {})
-    m = (mode_name or "").lower()
+    try:
+        with open(os.path.expanduser("~/robosub_software_2025/objects.yaml"), "r") as file:
+            return yaml.safe_load(file) or {}
+    except FileNotFoundError:
+        print(f"ERROR: config file not found at {os.path.expanduser('~/robosub_software_2025/objects.yaml')}")
+        return {}
+    except yaml.YAMLError as e:
+        print(f"ERROR: YAML parse error: {e}")
+        return {}
 
-    if m == "gate":
-        g = root.get("gate", {})
-        # Prefer the final gate target (x, y, z); fall back to buffers if absent
-        tx = float(g.get("x", g.get("x_buf", 0.0)))
-        ty = float(g.get("y", g.get("y_buf", 0.0)))
-        tz = float(g.get("z", g.get("z_buf", 0.0)))
-        return tx, ty, tz
 
-    elif m == "slalom":
-        s = root.get("slalom", {})
-        # Use first waypoint as the immediate target, and 'z' for depth
-        tx = float(s.get("x1", s.get("x_buf", 0.0)))
-        ty = float(s.get("y1", s.get("y_buf", 0.0)))
-        tz = float(s.get("z",  s.get("z_buf", 0.0)))
-        return tx, ty, tz
+def pick_first_float(d: dict, *keys: str) -> float:
+    """
+    Return the first present key parsed as float.
+    Falls back to 0.0 if none of the keys exist.
+    """
+    for key in keys:
+        if key in d:
+            try:
+                return float(d[key])
+            except (TypeError, ValueError):
+                pass
+    return 0.0
 
-    elif m == "octagon":
-        o = root.get("octagon", {})
-        tx = float(o.get("x", o.get("x_buf", 0.0)))
-        ty = float(o.get("y", o.get("y_buf", 0.0)))
-        tz = float(o.get("z", o.get("z_buf", 0.0)))
-        return tx, ty, tz
 
-    elif m == "return":
-        r = root.get("return", {})
-        # Head toward first leg; use 'depth' if provided, else z_buf/0
-        tx = float(r.get("x1", r.get("x_buf", 0.0)))
-        ty = float(r.get("y1", r.get("y_buf", 0.0)))
-        tz = float(r.get("depth", r.get("z_buf", 0.0)))
-        return tx, ty, tz
+def read_active_profile_name(config_dict: dict, default_profile_name: str = "test") -> str:
+    return str(config_dict.get("course", default_profile_name))
 
-    # Default: zeros
+
+def read_delay_and_multiplier(config_dict: dict, profile_name: str) -> tuple[float, float]:
+    profile_block = config_dict.get(profile_name) or {}
+    delay_value = float(profile_block.get("delay", 1.0))
+    mult_value  = float(profile_block.get("mult", 1.0))
+    return delay_value, mult_value
+
+
+def read_mode_target_xyz_from_config(mode_name: str, config_dict: dict, profile_name: str) -> tuple[float, float, float]:
+
+    profile_block = config_dict.get(profile_name) or {}
+    mode_key = str(mode_name or "").lower()
+
+    if mode_key == "gate":
+        gate_block = profile_block.get("gate", {}) or {}
+        target_x = pick_first_float(gate_block, "x")
+        target_y = pick_first_float(gate_block, "y")
+        target_z = pick_first_float(gate_block, "z")
+        return target_x, target_y, target_z
+
+    if mode_key == "slalom":
+        slalom_block = profile_block.get("slalom", {}) or {}
+        target_x = pick_first_float(slalom_block, "x1")
+        target_y = pick_first_float(slalom_block, "y1")
+        target_z = pick_first_float(slalom_block, "z")
+        return target_x, target_y, target_z
+
+    if mode_key == "octagon":
+        octagon_block = profile_block.get("octagon", {}) or {}
+        target_x = pick_first_float(octagon_block, "x")
+        target_y = pick_first_float(octagon_block, "y")
+        target_z = pick_first_float(octagon_block, "z")
+        return target_x, target_y, target_z
+
+    if mode_key == "return":
+        return_block = profile_block.get("return", {}) or {}
+        target_x = pick_first_float(return_block, "x1")
+        target_y = pick_first_float(return_block, "y1")
+        target_z = pick_first_float(return_block, "depth")
+        return target_x, target_y, target_z
+
     return 0.0, 0.0, 0.0
 
-# Link modes together in a linked list
+
 def make_list(modes):
-    for i in range(len(modes)-1):
-        modes[i].next_mode = modes[i+1]
+    for i in range(len(modes) - 1):
+        modes[i].next_mode = modes[i + 1]
     modes[-1].next_mode = None
 
 
 def display(mode):
-    # Display current DVL and target positions
     sm = shared_memory_object
-    print(f"x: {sm.dvl_x.value:.2f} → {sm.target_x.value:.2f}")
-    print(f"y: {sm.dvl_y.value:.2f} → {sm.target_y.value:.2f}")
-    print(f"z: {sm.dvl_z.value:.2f} → {sm.target_z.value:.2f}")
+    print(f"x: {sm.dvl_x.value:.2f} -> {sm.target_x.value:.2f}")
+    print(f"y: {sm.dvl_y.value:.2f} -> {sm.target_y.value:.2f}")
+    print(f"z: {sm.dvl_z.value:.2f} -> {sm.target_z.value:.2f}")
 
-    # Log the current state and DVL readings
-    new_entry = {
-        'mode': mode.name if mode else "None",
-        'state': getattr(mode, "state", "None") if mode else "None",
-        'dvl_x': sm.dvl_x.value,
-        'dvl_y': sm.dvl_y.value,
-        'dvl_z': sm.dvl_z.value,
-        'timestamp': time.time()
+    log_entry = {
+        "mode": mode.name if mode else "None",
+        "state": getattr(mode, "state", "None") if mode else "None",
+        "dvl_x": sm.dvl_x.value,
+        "dvl_y": sm.dvl_y.value,
+        "dvl_z": sm.dvl_z.value,
+        "timestamp": time.time(),
     }
 
     try:
-        with open("log.yaml", "r") as f:
-            logs = yaml.safe_load(f) or []
+        with open("log.yaml", "r") as file:
+            existing_logs = yaml.safe_load(file) or []
     except FileNotFoundError:
-        logs = []
+        existing_logs = []
 
-    logs.append(new_entry)
-    with open("log.yaml", "w") as f:
-        yaml.dump(logs, f)
-
+    existing_logs.append(log_entry)
+    with open("log.yaml", "w") as file:
+        yaml.dump(existing_logs, file)
 
 def loop(mode):
+    """
+    Main control loop.
+    - Reloads YAML each iteration so you can live-tune values
+    - Updates targets and simulates motion toward them
+    - Advances to the next mode once the target is reached
+    """
     while shared_memory_object.running.value:
-        with open(os.path.expanduser("~/robosub_software_2025/objects.yaml"), "r") as file:
-            data = yaml.safe_load(file)
-            course = data['course']
-            test_delay = data[course]['delay']
-            test_mult  = data[course]['mult']
+        config_dict = read_yaml_config()
+        active_profile_name = read_active_profile_name(config_dict, default_profile_name="test")
+        delay_seconds, speed_multiplier = read_delay_and_multiplier(config_dict, active_profile_name)
 
-        tx, ty, tz = get_targets_for_mode(mode.name, data, profile=course)
+        target_x, target_y, target_z = read_mode_target_xyz_from_config(
+            mode_name=mode.name,
+            config_dict=config_dict,
+            profile_name=active_profile_name,
+        )
 
         sm = shared_memory_object
-        sm.target_x.value, sm.target_y.value, sm.target_z.value = tx, ty, tz
+        sm.target_x.value = target_x
+        sm.target_y.value = target_y
+        sm.target_z.value = target_z
 
-        time.sleep(test_delay)
+        time.sleep(delay_seconds)
 
-        # Move toward target with random drift
-        max_step = max(1e-6, 0.25 * float(test_mult))
-        k = 0.15
-        sm.dvl_x.value = move_toward(sm.dvl_x.value, sm.target_x.value, k=k, max_step=max_step, noise_scale=0.05)
-        sm.dvl_y.value = move_toward(sm.dvl_y.value, sm.target_y.value, k=k, max_step=max_step, noise_scale=0.05)
-        sm.dvl_z.value = move_toward(sm.dvl_z.value, sm.target_z.value, k=k, max_step=max_step, noise_scale=0.05)
-        
-        # Check if mode is complete
+        max_step_size = max(1e-6, 0.25 * float(speed_multiplier))
+        prop_gain = 0.15
+
+        sm.dvl_x.value = move_toward(sm.dvl_x.value, sm.target_x.value,
+                                     test_prop_gain=prop_gain,
+                                     max_step=max_step_size,
+                                     noise_range=0.05)
+        sm.dvl_y.value = move_toward(sm.dvl_y.value, sm.target_y.value,
+                                     test_prop_gain=prop_gain,
+                                     max_step=max_step_size,
+                                     noise_range=0.05)
+        sm.dvl_z.value = move_toward(sm.dvl_z.value, sm.target_z.value,
+                                     test_prop_gain=prop_gain,
+                                     max_step=max_step_size,
+                                     noise_range=0.05)
         if hasattr(mode, "complete"):
             mode.complete = (
-                approx_equal(sm.dvl_x.value, sm.target_x.value) and
-                approx_equal(sm.dvl_y.value, sm.target_y.value) and
-                approx_equal(sm.dvl_z.value, sm.target_z.value)
+                approx_equal(sm.dvl_x.value, sm.target_x.value)
+                and approx_equal(sm.dvl_y.value, sm.target_y.value)
+                and approx_equal(sm.dvl_z.value, sm.target_z.value)
             )
-        
+
         mode.loop()
         display(mode)
-        
-        # Transition to next mode if current is complete
+
         if getattr(mode, "complete", False):
             next_mode = getattr(mode, "next_mode", None)
             mode = next_mode
@@ -176,9 +235,9 @@ def stop():
 
 def main():
     make_list(mode_list)
-    mode = mode_list[0]
-    mode.start()
-    loop(mode)
+    starting_mode = mode_list[0]
+    starting_mode.start()
+    loop(starting_mode)
 
 
 if __name__ == "__main__":
