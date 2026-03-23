@@ -99,7 +99,7 @@ class FSM_Template:
                 f"{self.name}:{self.state}",
                 f"{tgt_txt}\n{dvl_txt}"
             )
-        except:
+        except Exception as e:
             return
     
     def join(self) -> None:

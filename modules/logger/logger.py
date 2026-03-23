@@ -1,3 +1,4 @@
+import ast
 import logging
 import time
 import shared_memory
@@ -69,9 +70,9 @@ class Logger:
 
         for line in lines:
             if 'imu_lin_acc[0]' in line:
-                imu_lin_acc.append(eval(line.split(': ')[1]))
+                imu_lin_acc.append(ast.literal_eval(line.split(': ')[1]))
             elif 'imu_ang_vel[0]' in line:
-                imu_ang_vel.append(eval(line.split(': ')[1]))
+                imu_ang_vel.append(ast.literal_eval(line.split(': ')[1]))
             elif 'distance_from_object' in line:
                 distance_from_object.append(float(line.split(': ')[1]))
             elif 'depth' in line:

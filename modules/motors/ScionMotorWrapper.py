@@ -5,7 +5,7 @@ from typing         import Union
 
 try:
     import can
-except:
+except ImportError:
     print("CAN library not installed")
 
 '''
@@ -27,8 +27,8 @@ class Can_Wrapper:
         self.bus = None
         try:
             self.bus = can.Bus(interface='socketcan',channel = 'can0', receive_own_messages=True)
-        except:
-            print("CAN device not found")
+        except Exception as e:
+            print(f"CAN device not found: {e}")
 
         self.MAX_MOTOR_VAL = 100
     

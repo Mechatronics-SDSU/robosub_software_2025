@@ -51,7 +51,7 @@ class DVL_Interface:
                 print("dvl_altitude:", self.shared_memory_object.dvl_altitude.value)
                 print("dvl_velocity_valid:", self.shared_memory_object.dvl_velocity_valid.value)
                 print("dvl_status:", self.shared_memory_object.dvl_status.value)
-        except:
+        except Exception as e:
             print("NO DVL DATA")
 
     def run_loop(self):
