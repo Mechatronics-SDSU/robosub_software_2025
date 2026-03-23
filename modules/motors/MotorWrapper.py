@@ -7,7 +7,7 @@ from typing                                 import Union
 #this is to handle errors in using the CLI for testing motors
 try:
     from modules.motors.USB_Transmit        import USB_Transmitter
-except:
+except ImportError:
     from USB_Transmit                       import USB_Transmitter
 
 '''

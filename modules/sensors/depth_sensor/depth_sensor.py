@@ -14,14 +14,15 @@ class DepthSensor:
     def receive_data(self) -> str | None:
         try:
             return self.ser.readline().decode('ascii')
-        except:
-            pass
+        except Exception as e:
+            print(f"Depth sensor read error: {e}")
+            return None
 
     def run(self) -> None:
         while True:
             if self.ser:
-                data = self.receive_data() 
-                if data.split():
+                data = self.receive_data()
+                if data is not None and data.split():
                     print(data.split()[1])
 
 

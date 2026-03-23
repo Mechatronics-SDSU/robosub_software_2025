@@ -11,8 +11,13 @@ from numpy.typing import NDArray
 """
 
 P_DEBUG = True
+INTEGRAL_MAX = 5000  # Prevent integral windup — unbounded accumulation can saturate motors
 
 class PID:
+    # Maximum integral accumulation per axis — prevents windup from
+    # saturating motor output when the sub is held or stuck
+    INTEGRAL_CLAMP = 5000.0
+
     def __init__(self, kp, ki, kd, dt):
         self.kp = kp
         self.ki = ki
@@ -27,7 +32,10 @@ class PID:
 
     def get_error(self, initial_state: NDArray, desired_state: NDArray) -> None:
         self.error = np.subtract(desired_state, initial_state)
-        self.integral_error = self.prev_integral_error + self.error * self.dt
+        self.integral_error = np.clip(
+            self.prev_integral_error + self.error * self.dt,
+            -self.INTEGRAL_CLAMP, self.INTEGRAL_CLAMP
+        )
         self.derivative_error = np.subtract(self.error, self.prev_error) / self.dt
     
 
