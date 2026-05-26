@@ -8,8 +8,8 @@ import modules.logger.better_logger as better_logger
     
     This class is a wrapper for the dropper interface. It is used to send commands to the dropper.
     contains:
-        drop method: sends drop command to dropper and waits for response
-        reset method: sends reset command to dropper and waits for response
+        drop method: sends drop command to dropper
+        reset method: sends reset command to dropper
 
     NOTE: meant for dropper on caracara
 '''
