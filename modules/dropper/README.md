@@ -25,7 +25,7 @@ for controlling the dropper system during a run.
 - Call `drop()` to activate the dropper mechanism
 
 - Dropper firmware will receive serial commands corresponding to wrapper function calls and execute the matching actuator behavior on the STM32
-    - commands:
+    - Commands:
         - Drop: "D\n"
         - Reset: "R\n"
 
@@ -35,4 +35,4 @@ for controlling the dropper system during a run.
 
 ### Status
 
-- Current status: In Progress
+- Current status: Ready for Approval
