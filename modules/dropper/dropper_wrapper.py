@@ -1,6 +1,4 @@
-import os
 import serial
-import time
 
 import modules.logger.better_logger as better_logger
 
