@@ -15,23 +15,30 @@ import modules.logger.better_logger as better_logger
 '''
 
 class DropperWrapper:
-    def __init__(self, port, baudrate, timeout=1):
-        self.serial = serial.Serial(port, baudrate, timeout=timeout)
+    DROP_COMMAND = b"D\n" # send as bytes
+    RESET_COMMAND = b"R\n"
+    
+    def __init__(self, port, baudrate, shared_memory_object, timeout=1):
+        self.ser = serial.Serial(port, baudrate, timeout=timeout)
         self.logger = better_logger.Better_Logger()
+        self.shared_memory_object = shared_memory_object
+
+    def _send_command(self, msg, command_name):
+        try:
+            self.ser.write(msg)
+            self.ser.flush()
+            self.logger.log_info(f"Dropper: {command_name} command sent successfully.")
+        except serial.SerialException as e:
+            self.logger.log_error(f"Serial error while sending {command_name} command: {e}")
+        except Exception as e:
+            self.logger.log_error(f"Error occurred while sending {command_name} command: {e}")
 
     def drop(self):
-        try:
-            self.serial.write(b'D\n') # send drop command
-            self.logger.log_info("Dropper: drop command sent successfully.")
-        except Exception as e:
-            self.logger.log_error(f"Error occurred while sending drop command: {e}")
+        self._send_command(self.DROP_COMMAND, "drop")
 
     def reset(self):
-        try:
-            self.serial.write(b'R\n') # send reset command
-            self.logger.log_info("Dropper: reset command sent successfully.")
-        except Exception as e:
-            self.logger.log_error(f"Error occurred while sending reset command: {e}")
-    
+        self._send_command(self.RESET_COMMAND, "reset")
+
     def close(self):
-        self.serial.close()
+        if self.ser and self.ser.is_open:
+            self.ser.close()
