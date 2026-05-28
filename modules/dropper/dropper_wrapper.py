@@ -15,8 +15,8 @@ import modules.logger.better_logger as better_logger
 '''
 
 class DropperWrapper:
-    DROP_COMMAND = b"D\n" # send as bytes
-    RESET_COMMAND = b"R\n"
+    DROP_COMMAND = b"D" # send as byte
+    RESET_COMMAND = b"R"
     
     def __init__(self, port, baudrate, shared_memory_object, timeout=1):
         self.ser = serial.Serial(port, baudrate, timeout=timeout)
