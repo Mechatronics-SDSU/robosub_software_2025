@@ -24,6 +24,7 @@ for controlling the dropper system during a run.
 - Run `python test_dropper.py` to validate functionality
 
 The dropper firmware receives PWM values (in microseconds) sent to the STM32:
+
 **Commands:**
 - `drop()`
   - Without argument: uses `DROP_PWM = 1500` (predetermined drop angle)
