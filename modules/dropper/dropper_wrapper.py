@@ -1,4 +1,5 @@
 import serial
+import struct
 import modules.logger.better_logger as better_logger
 from shared_memory  import SharedMemoryWrapper
 
@@ -30,13 +31,13 @@ class DropperWrapper:
         """Send PWM value to the dropper via serial connection.
         
         Args:
-            data: PWM value (in microseconds) to send to the STM32
+            pwm: PWM value (in microseconds) to send to the STM32 as raw binary
             command_name: Name of the command for logging purposes
         """        
         try:
-            data = str(pwm).encode()
+            data = struct.pack('<H', pwm)  # little-endian (2 bytes)
             self.ser.write(data)
-            self.ser.flush()    # wait for the pwm to be sent
+            self.ser.flush()    # wait for the data to be sent
             self.logger.log_info(f"DropperWrapper: {command_name} pwm sent successfully.")
         except serial.SerialException as e:
             self.logger.log_error(f"DropperWrapper: Serial error while sending {command_name} pwm: {e}")
