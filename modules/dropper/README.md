@@ -22,12 +22,18 @@ for controlling the dropper system during a run.
 ### Usage
 
 - Run `python test_dropper.py` to validate functionality
-- Call `drop()` to activate the dropper mechanism
 
-- Dropper firmware will receive serial commands corresponding to wrapper function calls and execute the matching actuator behavior on the STM32
-    - Commands:
-        - Drop: "D\n"
-        - Reset: "R\n"
+The dropper firmware receives PWM values (in microseconds) sent to the STM32:
+**Commands:**
+- `drop()`
+  - Without argument: uses `DROP_PWM = 1500` (predetermined drop angle)
+  - With argument: `drop(1500)` sets a specific PWM value
+
+- `reset()`
+  - Without argument: uses `RESET_PWM = 300` (predetermined reset angle)
+  - With argument: `reset(300)` sets a specific PWM value
+
+Edit the `DROP_PWM` and `RESET_PWM` constants in `dropper_wrapper.py` as needed.
 
 ### Notes
 
@@ -35,4 +41,4 @@ for controlling the dropper system during a run.
 
 ### Status
 
-- Current status: Ready for Approval
+- Current status: In testosterone
