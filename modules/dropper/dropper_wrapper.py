@@ -1,7 +1,7 @@
 import serial
 import struct
 import modules.logger.better_logger as better_logger
-from shared_memory  import SharedMemoryWrapper
+from modules.motors.USB_Transmit    import USB_Transmitter
 
 '''
     discord: @alicvo
@@ -9,8 +9,8 @@ from shared_memory  import SharedMemoryWrapper
     
     This class is a wrapper for the dropper interface. It is used to send pwm signals to the dropper.
     contains:
-        drop method: sends drop pwm to dropper
-        reset method: sends reset pwm to dropper
+        drop method: sets current pwm in shared memory to drop value
+        reset method: sets current pwm in shared memory to reset value
 
     NOTE: meant for dropper on caracara
 '''
@@ -19,55 +19,27 @@ class DropperWrapper:
     DROP_PWM = 1500  # PWM value for drop (change if needed)
     RESET_PWM = 300  # PWM value for reset (change if needed i lowkey dont know the values)
     
-    def __init__(self, port, baudrate, shared_memory_object, timeout=1):
-        try:
-            self.ser = serial.Serial(port, baudrate, timeout=timeout)
-        except serial.SerialException as e:
-            print(f"DropperWrapper: Error occurred while initializing serial connection: {e}")
+    def __init__(self, shared_memory_object):
+        self.usb_transmitter = USB_Transmitter()
         self.logger = better_logger.Better_Logger()
         self.shared_memory_object = shared_memory_object
+        self.current_pwm = self.RESET_PWM  # Start with the dropper in the reset position
 
-    def send_pwm(self, pwm, command_name):        
-        """Send PWM value to the dropper via serial connection.
-        
-        Args:
-            pwm: PWM value (in microseconds) to send to the STM32 as raw binary
-            command_name: Name of the command for logging purposes
-        """        
-        try:
-            data = struct.pack('<H', pwm)  # little-endian (2 bytes)
-            self.ser.write(data)
-            self.ser.flush()    # wait for the data to be sent
-            self.logger.log_info(f"DropperWrapper: {command_name} pwm sent successfully.")
-        except serial.SerialException as e:
-            self.logger.log_error(f"DropperWrapper: Serial error while sending {command_name} pwm: {e}")
-        except Exception as e:
-            self.logger.log_error(f"DropperWrapper: Error occurred while sending {command_name} pwm: {e}")
+    def get_pwm(self):
+        return self.current_pwm
 
     def drop(self, pwm_value=None):
-        """Trigger the dropper to release its payload.
-        
-        Args:
-            pwm_value (int, optional): Custom PWM value in microseconds. 
-                                      If not provided, uses DROP_PWM constant.
-        """
         if pwm_value is not None:
-            self.send_pwm(pwm_value, "drop")
+            pwm = pwm_value
         else:
-            self.send_pwm(self.DROP_PWM, "drop")
+            pwm = self.DROP_PWM
+        self.shared_memory_object.dropper_pwm.value = pwm
+        self.logger.log_info(f"DropperWrapper: drop set (PWM: {pwm})")
 
     def reset(self, pwm_value=None):
-        """Reset the dropper mechanism to its initial armed position.
-        
-        Args:
-            pwm_value (int, optional): Custom PWM value in microseconds. 
-                                      If not provided, uses RESET_PWM constant.
-        """
         if pwm_value is not None:
-            self.send_pwm(pwm_value, "reset")
+            pwm = pwm_value
         else:
-            self.send_pwm(self.RESET_PWM, "reset")
-
-    def close(self):
-        if self.ser and self.ser.is_open:
-            self.ser.close()
+            pwm = self.RESET_PWM
+        self.shared_memory_object.dropper_pwm.value = pwm
+        self.logger.log_info(f"DropperWrapper: reset set (PWM: {pwm})")
