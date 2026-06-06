@@ -23,10 +23,6 @@ class DropperWrapper:
         self.usb_transmitter = USB_Transmitter()
         self.logger = better_logger.Better_Logger()
         self.shared_memory_object = shared_memory_object
-        self.current_pwm = self.RESET_PWM  # Start with the dropper in the reset position
-
-    def get_pwm(self):
-        return self.current_pwm
 
     def drop(self, pwm_value=None):
         if pwm_value is not None:
