@@ -71,6 +71,9 @@ class SharedMemoryWrapper:
 
         # motor values
         self.motor_values           = Value('d', 0)
+
+        # dropper
+        self.dropper_pwm            = Value('i', 300)
         
         # whether or not to run display code
         self.display_on             = Value('b', False)
