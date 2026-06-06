@@ -31,6 +31,7 @@ except:
         usbData[10] = red; 
         usbData[11] = green; 
         usbData[12] = blue;
+        usbData[13] = dropperPWM;
 
     NOTE: THIS WRAPPER IS MEANT FOR CARACARA ONLY, SCION USES A DIFFERENT MOTOR WRAPPER
 '''
@@ -126,6 +127,8 @@ class MotorWrapper:
 
     #sends commands to motors
     def send_command(self) -> list:
+        self.controls[5] = self.shared_memory_object.dropper_pwm.value # assign dropper pwm to control value
+        
         send_data = np.concatenate((self.motor_vals, self.controls), axis=None).astype(int)
         for i, data in enumerate(send_data):
             send_data[i] = self.valid(data)
